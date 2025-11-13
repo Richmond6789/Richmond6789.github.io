@@ -22,6 +22,8 @@ class HealthDataParser {
         this.dataTypes = new Set();
 
         try {
+            console.log('Bắt đầu parseXML, kích thước:', (xmlContent.length / 1024 / 1024).toFixed(2), 'MB');
+
             if (progressCallback) progressCallback(10, 'Đang phân tích cú pháp XML...');
 
             // For large files, we'll use DOMParser with chunking approach
@@ -31,8 +33,15 @@ class HealthDataParser {
             // Check for parsing errors
             const parserError = xmlDoc.querySelector('parsererror');
             if (parserError) {
+                console.error('Parser error:', parserError.textContent);
                 throw new Error('Lỗi phân tích XML: ' + parserError.textContent);
             }
+
+            console.log('XML parsed thành công');
+
+            // Check root element
+            const rootElement = xmlDoc.documentElement;
+            console.log('Root element:', rootElement.tagName);
 
             if (progressCallback) progressCallback(30, 'Đang trích xuất dữ liệu...');
 
@@ -40,7 +49,7 @@ class HealthDataParser {
             const records = xmlDoc.querySelectorAll('Record');
             const totalRecords = records.length;
 
-            console.log(`Tìm thấy ${totalRecords} bản ghi`);
+            console.log(`Tìm thấy ${totalRecords} bản ghi Record`);
 
             // Process records in batches to avoid blocking UI
             const batchSize = 1000;
@@ -91,6 +100,7 @@ class HealthDataParser {
             // Also parse Workout data if present
             const workouts = xmlDoc.querySelectorAll('Workout');
             if (workouts.length > 0) {
+                console.log(`Tìm thấy ${workouts.length} workouts`);
                 this.parseWorkouts(workouts);
             }
 
@@ -100,6 +110,7 @@ class HealthDataParser {
             this.rawData.sort((a, b) => b.startDate - a.startDate);
 
             console.log(`Phân tích hoàn tất: ${this.rawData.length} bản ghi, ${this.dataTypes.size} loại dữ liệu`);
+            console.log('Các loại dữ liệu:', Array.from(this.dataTypes).slice(0, 10).join(', '), '...');
 
             if (progressCallback) progressCallback(100, 'Hoàn tất!');
 
