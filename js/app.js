@@ -139,42 +139,88 @@ class HealthDataApp {
      * @param {File} file - Uploaded file
      */
     async handleFileUpload(file) {
-        if (!file.name.endsWith('.zip')) {
-            alert('Vui lòng chọn file ZIP được xuất từ Apple Health!');
+        const isZip = file.name.toLowerCase().endsWith('.zip');
+        const isXml = file.name.toLowerCase().endsWith('.xml');
+
+        if (!isZip && !isXml) {
+            alert('Vui lòng chọn file ZIP hoặc XML được xuất từ Apple Health!');
             return;
         }
 
         try {
+            console.log(`Đang xử lý file: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+
             // Show progress
             document.getElementById('uploadSection').style.display = 'none';
             document.getElementById('progressContainer').style.display = 'block';
 
-            this.updateProgress(5, 'Đang đọc file ZIP...');
-
-            // Read ZIP file
-            const zipData = await this.readFileAsArrayBuffer(file);
-
-            this.updateProgress(10, 'Đang giải nén file...');
-
-            // Extract ZIP
-            const zip = await JSZip.loadAsync(zipData);
-
-            // Find export.xml
             let exportXML = null;
-            const exportFile = zip.file('apple_health_export/export.xml') ||
-                               zip.file('export.xml');
 
-            if (exportFile) {
-                this.updateProgress(20, 'Đang đọc dữ liệu XML...');
-                exportXML = await exportFile.async('string');
+            if (isXml) {
+                // Handle XML file directly
+                this.updateProgress(5, 'Đang đọc file XML...');
+                exportXML = await this.readFileAsText(file);
+                console.log(`Đã đọc XML: ${(exportXML.length / 1024 / 1024).toFixed(2)} MB`);
             } else {
-                throw new Error('Không tìm thấy file export.xml trong ZIP');
+                // Handle ZIP file
+                this.updateProgress(5, 'Đang đọc file ZIP...');
+                const zipData = await this.readFileAsArrayBuffer(file);
+
+                this.updateProgress(10, 'Đang giải nén file...');
+                const zip = await JSZip.loadAsync(zipData);
+
+                console.log('Files trong ZIP:', Object.keys(zip.files));
+
+                // Find export.xml - try multiple possible paths
+                const possiblePaths = [
+                    'apple_health_export/export.xml',
+                    'export.xml',
+                    'Export.xml',
+                    'apple_health_export/Export.xml'
+                ];
+
+                let exportFile = null;
+                for (const path of possiblePaths) {
+                    exportFile = zip.file(path);
+                    if (exportFile) {
+                        console.log(`Tìm thấy export.xml tại: ${path}`);
+                        break;
+                    }
+                }
+
+                if (exportFile) {
+                    this.updateProgress(20, 'Đang đọc dữ liệu XML...');
+                    exportXML = await exportFile.async('string');
+                    console.log(`Đã giải nén XML: ${(exportXML.length / 1024 / 1024).toFixed(2)} MB`);
+                } else {
+                    // List all files in ZIP for debugging
+                    const fileList = Object.keys(zip.files).join(', ');
+                    throw new Error(`Không tìm thấy file export.xml trong ZIP. Files có sẵn: ${fileList}`);
+                }
             }
+
+            // Validate XML content
+            if (!exportXML || exportXML.trim().length === 0) {
+                throw new Error('File XML trống hoặc không hợp lệ');
+            }
+
+            if (!exportXML.includes('<HealthData') && !exportXML.includes('<healthdata')) {
+                throw new Error('File không phải là dữ liệu Apple Health hợp lệ');
+            }
+
+            console.log('Bắt đầu phân tích XML...');
 
             // Parse XML
             await this.parser.parseXML(exportXML, (progress, message) => {
                 this.updateProgress(progress, message);
             });
+
+            console.log(`Phân tích hoàn tất: ${this.parser.rawData.length} bản ghi`);
+
+            // Check if we have data
+            if (this.parser.rawData.length === 0) {
+                throw new Error('Không tìm thấy dữ liệu trong file. Vui lòng kiểm tra lại file export.');
+            }
 
             // Initialize data view
             this.initializeDataView();
@@ -186,7 +232,14 @@ class HealthDataApp {
             console.log('Tải dữ liệu thành công!');
         } catch (error) {
             console.error('Lỗi xử lý file:', error);
-            alert(`Lỗi: ${error.message}`);
+            console.error('Stack trace:', error.stack);
+
+            let errorMessage = error.message;
+            if (error.message.includes('Cannot read properties')) {
+                errorMessage = 'Lỗi đọc file. Vui lòng đảm bảo file là export.xml hợp lệ từ Apple Health.';
+            }
+
+            alert(`Lỗi: ${errorMessage}\n\nVui lòng kiểm tra console (F12) để xem chi tiết.`);
             document.getElementById('progressContainer').style.display = 'none';
             document.getElementById('uploadSection').style.display = 'block';
         }
@@ -207,6 +260,20 @@ class HealthDataApp {
     }
 
     /**
+     * Read file as Text
+     * @param {File} file - File to read
+     * @returns {Promise<string>}
+     */
+    readFileAsText(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = (e) => reject(new Error('Không thể đọc file'));
+            reader.readAsText(file, 'UTF-8');
+        });
+    }
+
+    /**
      * Update progress bar
      * @param {number} percent - Progress percentage
      * @param {string} message - Progress message
@@ -220,8 +287,18 @@ class HealthDataApp {
      * Initialize data view after parsing
      */
     initializeDataView() {
+        console.log('Initializing data view...');
+
         // Populate data type selector
         const dataTypes = this.parser.getDataTypes();
+        console.log(`Found ${dataTypes.length} data types`);
+
+        if (dataTypes.length === 0) {
+            console.error('No data types found!');
+            alert('Không tìm thấy loại dữ liệu nào. Vui lòng kiểm tra file XML.');
+            return;
+        }
+
         const select = document.getElementById('dataTypeSelect');
 
         select.innerHTML = '<option value="">-- Chọn loại dữ liệu --</option>';
@@ -233,13 +310,17 @@ class HealthDataApp {
             select.appendChild(option);
         });
 
+        console.log(`Added ${dataTypes.length} options to select`);
+
         // Select first data type
         if (dataTypes.length > 0) {
             this.currentDataType = dataTypes[0];
             select.value = dataTypes[0];
+            console.log(`Selected default data type: ${this.currentDataType}`);
         }
 
         // Update view
+        console.log('Updating view...');
         this.updateView();
     }
 
@@ -316,7 +397,12 @@ class HealthDataApp {
      * Update view with current filters
      */
     updateView() {
-        if (!this.currentDataType || !this.currentDateRange) return;
+        console.log('updateView called, currentDataType:', this.currentDataType, 'currentDateRange:', this.currentDateRange);
+
+        if (!this.currentDataType || !this.currentDateRange) {
+            console.warn('Missing currentDataType or currentDateRange, skipping view update');
+            return;
+        }
 
         // Filter data
         this.filteredData = this.parser.filterData(
@@ -324,6 +410,8 @@ class HealthDataApp {
             this.currentDateRange.start,
             this.currentDateRange.end
         );
+
+        console.log(`Filtered data: ${this.filteredData.length} records for date range ${this.currentDateRange.start.toLocaleDateString()} - ${this.currentDateRange.end.toLocaleDateString()}`);
 
         // Update statistics
         this.updateStatistics();
@@ -334,6 +422,8 @@ class HealthDataApp {
         // Update table
         this.currentPage = 1;
         this.renderTable();
+
+        console.log('View update completed');
     }
 
     /**
