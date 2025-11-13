@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple Health Data Analyzer</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- JSZip for ZIP file extraction -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Date picker library -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>📊 Apple Health Data Analyzer</h1>
+            <p class="subtitle">Phân tích dữ liệu sức khỏe từ iPhone của bạn</p>
+        </header>
+
+        <!-- File Upload Section -->
+        <section class="upload-section" id="uploadSection">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📁</div>
+                <h2>Kéo thả file ZIP vào đây</h2>
+                <p>hoặc</p>
+                <button class="btn btn-primary" id="selectFileBtn">Chọn file</button>
+                <input type="file" id="fileInput" accept=".zip" style="display: none;">
+                <p class="upload-hint">Hỗ trợ file ZIP xuất từ Apple Health (tối đa vài trăm MB)</p>
+            </div>
+            <div class="progress-container" id="progressContainer" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <p class="progress-text" id="progressText">Đang xử lý...</p>
+            </div>
+        </section>
+
+        <!-- Main Content (hidden until data is loaded) -->
+        <main class="main-content" id="mainContent" style="display: none;">
+            <!-- Controls -->
+            <section class="controls">
+                <div class="control-group">
+                    <label>Loại dữ liệu:</label>
+                    <select id="dataTypeSelect" class="select-control">
+                        <option value="">Đang tải...</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label>Khoảng thời gian:</label>
+                    <div class="btn-group">
+                        <button class="btn btn-small" data-range="day">Ngày</button>
+                        <button class="btn btn-small active" data-range="week">Tuần</button>
+                        <button class="btn btn-small" data-range="month">Tháng</button>
+                        <button class="btn btn-small" data-range="year">Năm</button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Chọn ngày:</label>
+                    <input type="text" id="datePicker" class="date-input" placeholder="Chọn ngày...">
+                </div>
+
+                <div class="control-group">
+                    <button class="btn btn-secondary" id="resetBtn">🔄 Reset</button>
+                    <button class="btn btn-secondary" id="newFileBtn">📁 File mới</button>
+                </div>
+            </div>
+
+            <!-- Statistics Summary -->
+            <section class="stats-summary" id="statsSummary">
+                <div class="stat-card">
+                    <h3>Tổng số bản ghi</h3>
+                    <p class="stat-value" id="totalRecords">0</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Giá trị trung bình</h3>
+                    <p class="stat-value" id="avgValue">-</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Giá trị cao nhất</h3>
+                    <p class="stat-value" id="maxValue">-</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Giá trị thấp nhất</h3>
+                    <p class="stat-value" id="minValue">-</p>
+                </div>
+            </section>
+
+            <!-- Chart -->
+            <section class="chart-section">
+                <h2>Biểu đồ dữ liệu</h2>
+                <div class="chart-container">
+                    <canvas id="dataChart"></canvas>
+                </div>
+            </section>
+
+            <!-- Data Table -->
+            <section class="table-section">
+                <h2>Chi tiết dữ liệu</h2>
+                <div class="table-controls">
+                    <input type="text" id="searchInput" class="search-input" placeholder="Tìm kiếm...">
+                    <select id="sortSelect" class="select-control">
+                        <option value="date-desc">Ngày (Mới nhất)</option>
+                        <option value="date-asc">Ngày (Cũ nhất)</option>
+                        <option value="value-desc">Giá trị (Cao nhất)</option>
+                        <option value="value-asc">Giá trị (Thấp nhất)</option>
+                    </select>
+                </div>
+                <div class="table-wrapper">
+                    <table class="data-table" id="dataTable">
+                        <thead>
+                            <tr>
+                                <th>Ngày giờ</th>
+                                <th>Giá trị</th>
+                                <th>Đơn vị</th>
+                                <th>Nguồn</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr>
+                                <td colspan="4" class="text-center">Không có dữ liệu</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="pagination"></div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>© 2024 Apple Health Data Analyzer | Dữ liệu được xử lý hoàn toàn trên trình duyệt của bạn</p>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/parser.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
